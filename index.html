@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+          content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>Smart Flowerpot</title>
+</head>
+<body>
+
+<h1>Smart Flowerpot</h1>
+
+<h2>General</h2>
+<table>
+    <tr>
+        <td>Current Time</td>
+        <td><span id="current-time">loading</span></td>
+    </tr>
+    <tr>
+        <td>Last Measurement</td>
+        <td><b id="last-measurement-value">loading</b> at <i id="last-measurement-time">loading</i></td>
+    </tr>
+</table>
+
+<hr>
+<h2>WiFi</h2>
+
+<table>
+    <tr>
+        <td>Status</td>
+        <td><span id="wifi-status"></span></td>
+    </tr>
+    <tr>
+        <td>SSID</td>
+        <td><input type="text" name="SSID" id="wifi-ssid"></td>
+    </tr>
+    <tr>
+        <td>Password</td>
+        <td><input type="text" name="password" id="wifi-password"></td>
+    </tr>
+    <tr>
+        <td colspan="2">
+            <button id="connect-wifi-btn" style="width: 100%">Connect</button>
+        </td>
+    </tr>
+</table>
+<hr>
+<h2>Pour Activation Configuration</h2>
+
+<table>
+    <tr>
+        <td>Measurement Value Range</td>
+        <td>
+            <input type="text" name="pour-measurement-min" id="pour-measurement-min">
+            -
+            <input type="text" name="pour-measurement-max" id="pour-measurement-max">
+        </td>
+    </tr>
+    <tr>
+        <td>Hours Range</td>
+        <td>
+            <input type="text" name="pour-hours-min" id="pour-hours-min">
+            -
+            <input type="text" name="pour-hours-max" id="pour-hours-max">
+        </td>
+    </tr>
+    <tr>
+        <td colspan="2">
+            <button id="save-pour-config-btn" style="width: 100%">Save</button>
+        </td>
+    </tr>
+</table>
+<hr>
+
+<script>
+    const wifiSsidInp = document.getElementById('wifi-ssid');
+    const wifiPasswordInp = document.getElementById('wifi-password');
+    const wifiStatusSpan = document.getElementById('wifi-status');
+
+    const connectWiFIButton = document.getElementById('connect-wifi-btn');
+    const currentTimeSpan = document.getElementById('current-time');
+    const lastMeasurementValueSpan = document.getElementById('last-measurement-value');
+    const lastMeasurementTimeSpan = document.getElementById('last-measurement-time');
+
+    const savePourConfigButton = document.getElementById('save-pour-config-btn');
+    const pourMeasurementMinInp = document.getElementById('pour-measurement-min');
+    const pourMeasurementMaxInp = document.getElementById('pour-measurement-max');
+    const pourHoursMinInp = document.getElementById('pour-hours-min');
+    const pourHoursMaxInp = document.getElementById('pour-hours-max');
+    let isPourConfigTouched = false;
+
+    const touchPourConfig = () => isPourConfigTouched = true;
+
+    pourMeasurementMinInp.onkeypress = touchPourConfig;
+    pourMeasurementMaxInp.onkeypress = touchPourConfig;
+    pourHoursMinInp.onkeypress = touchPourConfig;
+    pourHoursMaxInp.onkeypress = touchPourConfig;
+
+    updateState();
+
+    connectWiFIButton.onclick = () => {
+        connectWiFIButton.disabled = true;
+        connectWiFIButton.innerText = 'Connecting...';
+
+        const onLoaded = () => {
+            connectWiFIButton.disabled = false;
+            connectWiFIButton.innerText = 'Connect';
+        };
+
+        fetch('/api/wifi-connect?SSID=' + wifiSsidInp.value+ '&password='+ wifiPasswordInp.value)
+            .then(res => res.text())
+            .then(onLoaded, onLoaded)
+            .then(updateState);
+    };
+
+    savePourConfigButton.onclick = () => {
+        savePourConfigButton.disabled = true;
+        savePourConfigButton.innerText = 'Saving...';
+
+        const onLoaded = () => {
+            savePourConfigButton.disabled = false;
+            savePourConfigButton.innerText = 'Save';
+            isPourConfigTouched = false;
+        };
+
+        fetch('/api/pour-properties' +
+            '?pour-measurement-min=' + pourMeasurementMinInp.value +
+            '&pour-measurement-max=' + pourMeasurementMaxInp.value +
+            '&pour-hours-min=' + pourHoursMinInp.value +
+            '&pour-hours-max=' + pourHoursMaxInp.value)
+            .then(res => res.text())
+            .then(onLoaded, onLoaded)
+            .then(updateState);
+    };
+
+    var updateStateTimer = null;
+    function updateState() {
+        const reschedule = () => {
+            clearTimeout(updateStateTimer);
+            updateStateTimer = setTimeout(updateState, 20000);
+        };
+
+        fetch('/api/state')
+            .then(res => res.json())
+            .then(status => {
+                wifiSsidInp.value = status.wifi_connection_ssid;
+                if (status.wifi_is_connected) {
+                    wifiStatusSpan.innerText = 'Connected';
+                    wifiStatusSpan.style.color = 'green';
+                } else {
+                    wifiStatusSpan.innerText = 'Disconnected';
+                    wifiStatusSpan.style.color = 'red';
+                }
+
+                currentTimeSpan.innerText = new Date(status.current_time * 1000).toGMTString();
+                lastMeasurementValueSpan.innerText = status.last_measurement_value;
+                lastMeasurementTimeSpan.innerText = new Date(status.last_measurement_time * 1000).toGMTString();
+
+                if (!isPourConfigTouched) {
+                    pourMeasurementMinInp.value = status.pour_measurement_min;
+                    pourMeasurementMaxInp.value = status.pour_measurement_max;
+                    pourHoursMinInp.value = status.pour_hours_min;
+                    pourHoursMaxInp.value = status.pour_hours_max;
+                }
+            })
+            .then(reschedule, reschedule);
+    }
+</script>
+</body>
+</html>
