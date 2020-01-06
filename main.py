@@ -65,16 +65,20 @@ ap = network.WLAN(network.AP_IF)
 ap.active(True)
 ap.config(essid='SmartFlowerpot', authmode=network.AUTH_WPA_WPA2_PSK, password="new-year-2020")
 
-print("Server started @ ", ap.ifconfig()[0])
 
 engine_pin = machine.Pin(2, machine.Pin.OUT)
 engine_pin.off()
 
 ESP8266WebServer.begin(80)
 
+print("Server started @ ", ap.ifconfig()[0])
+
 
 def handle_index(socket, args):
-    socket.write("HTTP/1.1 200 OK\r\n\r\n")
+    socket.write("HTTP/1.1 200 OK\r\n")
+    socket.write("Content-Type: text/html\r\n")
+    socket.write("Content-Length: " + str(os.stat('index.html')[6]) + "\r\n")
+    socket.write("\r\n")
     f = open('index.html', "rb")
     while True:
         data = f.read(64)
@@ -88,7 +92,6 @@ ESP8266WebServer.onPath("/", handle_index)
 
 
 def handle_wifi_credentials(socket, args):
-    socket.write("HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n")
     f = open('wifi.txt', 'w+')
     f.write(args['SSID'])
     f.write('\n')
@@ -96,13 +99,19 @@ def handle_wifi_credentials(socket, args):
     f.write('\n')
     f.close()
     if connect_to_wifi():
-        socket.write('Connected!<br><a href="/">Home</a>')
+        response = 'Connected!<br><a href="/">Home</a>'
         try:
             receive_and_set_real_time()
         except:
             pass
     else:
-        socket.write('Connection Error<br><a href="/">Home</a>')
+        response = 'Connection Error<br><a href="/">Home</a>'
+
+    socket.write("HTTP/1.1 200 OK\r\n")
+    socket.write("Content-Type: text/html\r\n")
+    socket.write("Content-Length: " + str(len(response)) + "\r\n")
+    socket.write("\r\n")
+    socket.write(response)
 
 
 ESP8266WebServer.onPath("/api/wifi-connect", handle_wifi_credentials)
@@ -213,5 +222,6 @@ try:
             else:
                 print("Measured humidity value is fine, no need for pouring!")
 
-except:
+except Exception as e:
+    print(e)
     ESP8266WebServer.close()
